@@ -1,0 +1,29 @@
+Field	Type	Null	Key	Default	Extra
+id	int(11)	NO	PRI	NULL	auto_increment
+timestamp	datetime	YES		NULL	
+nama_tamu	varchar(255)	YES		NULL	
+nik	varchar(16)	YES	MUL	NULL	
+tanggal_lahir	date	YES		NULL	
+tipe_tamu	varchar(100)	YES		NULL	
+nama_instansi	varchar(255)	YES		NULL	
+booking_check_in	varchar(50)	YES		NULL	
+no_hp	varchar(25)	YES		NULL	
+alamat	text	YES		NULL	
+rt_rw	varchar(10)	YES		NULL	
+kel_desa	varchar(255)	YES		NULL	
+kecamatan	varchar(255)	YES		NULL	
+tanggal_check_in	date	YES	MUL	NULL	
+tanggal_check_out	date	YES		NULL	
+nama_kamar	varchar(255)	YES		NULL	
+upload_identitas	text	YES		NULL	
+acara_judul_diklat	varchar(255)	YES		NULL	
+upload_pembayaran	text	YES		NULL	
+email	varchar(255)	YES		NULL	
+akun_google	varchar(255)	YES		NULL	
+nama_kelas	varchar(255)	YES		NULL	
+harga_kamar	int(11)	YES		NULL	
+harga_kelas	int(11)	YES		NULL	
+total_amount	int(11)	YES		0	
+status	enum('active','checked_out','cancelled')	YES	MUL	active	
+input_method	varchar(20)	YES		manual	
+rfid_uid	varchar(20)	YES	MUL	NULL	
