@@ -99,10 +99,15 @@ if ($reservation_id == 0) {
 
 // Fetch guest data
 $sql = "SELECT 
-            dt.*,
-            DATEDIFF(tanggal_check_out, tanggal_check_in) as jumlah_malam
-        FROM data_tamu dt
-        WHERE dt.id = ?";
+            t.nama as nama_tamu,
+            i.tanggal_check_in, i.tanggal_check_out,
+            i.nama_kamar, i.harga_kamar, i.nama_kelas, i.harga_kelas,
+            i.detail_acara as acara_judul_diklat,
+            DATEDIFF(i.tanggal_check_out, i.tanggal_check_in) as jumlah_malam
+        FROM checkin_tamu_log cl
+        JOIN tamu_ms t ON cl.id_tamu = t.id_tamu
+        JOIN inapan_ms i ON cl.id_inapan = i.id_inapan
+        WHERE cl.checkin_tamu_id = ?";
 
 $stmt = $conn->prepare($sql);
 if (!$stmt) {

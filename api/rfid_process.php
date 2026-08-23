@@ -44,9 +44,9 @@ if ($action == 'lookup') {
     $stmt = $conn->prepare("
         SELECT rm.*, dt.* 
         FROM rfid_mapping rm
-        LEFT JOIN data_tamu dt ON rm.nik = dt.nik
+        LEFT JOIN tamu_ms dt ON rm.nik = dt.nik
         WHERE rm.uid = ?
-        ORDER BY dt.id DESC
+        ORDER BY dt.id_tamu DESC
         LIMIT 1
     ");
     
@@ -70,7 +70,7 @@ if ($action == 'lookup') {
             'data' => [
                 'uid' => $uid,
                 'nik' => $data['nik'],
-                'nama' => $data['nama_tamu'] ?? $data['nama'],
+                'nama' => $data['nama'],
                 'tempat_lahir' => $data['tempat_lahir'],
                 'tanggal_lahir' => $data['tanggal_lahir'],
                 'jenis_kelamin' => $data['jenis_kelamin'],
@@ -215,13 +215,14 @@ if ($action == 'lookup') {
     }
     $stmt->close();
     
-    // Prioritas 2 (Sesuai usulan User): Cek riwayat absen di tabel data_tamu
+    // Prioritas 2 (Sesuai usulan User): Cek riwayat absen
     // Cari tamu dengan NIK tersebut yang sudah memiliki rfid_uid tertaut
     $stmt_history = $conn->prepare("
-        SELECT rfid_uid, nama_tamu as nama 
-        FROM data_tamu 
-        WHERE nik = ? AND rfid_uid IS NOT NULL AND rfid_uid != '' 
-        ORDER BY id DESC LIMIT 1
+        SELECT cl.rfid_uid, t.nama as nama 
+        FROM checkin_tamu_log cl 
+        JOIN tamu_ms t ON cl.id_tamu = t.id_tamu
+        WHERE t.nik = ? AND cl.rfid_uid IS NOT NULL AND cl.rfid_uid != '' 
+        ORDER BY cl.checkin_tamu_id DESC LIMIT 1
     ");
     $stmt_history->bind_param("s", $nik);
     $stmt_history->execute();

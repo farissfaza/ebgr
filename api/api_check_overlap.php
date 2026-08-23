@@ -34,14 +34,17 @@ if (strtotime($tanggal_check_out) <= strtotime($tanggal_check_in)) {
     exit;
 }
 
-// 1. Check if user already has an overlapping booking
+// 1. Check if user already has an overlapping booking (new schema: checkin_tamu_log + tamu_ms + inapan_ms)
 if (!empty($nik) && !empty($nama_tamu)) {
     $stmtUserCheck = $conn->prepare("
-        SELECT id FROM data_tamu 
-        WHERE nik = ? AND nama_tamu = ? 
-        AND status != 'cancelled'
-        AND tanggal_check_in < ? 
-        AND tanggal_check_out > ? 
+        SELECT cl.checkin_tamu_id 
+        FROM checkin_tamu_log cl
+        JOIN tamu_ms t ON cl.id_tamu = t.id_tamu
+        JOIN inapan_ms i ON cl.id_inapan = i.id_inapan
+        WHERE t.nik = ? AND t.nama = ? 
+        AND cl.status != 'cancelled'
+        AND i.tanggal_check_in < ? 
+        AND i.tanggal_check_out > ? 
         LIMIT 1
     ");
     if ($stmtUserCheck) {
@@ -59,11 +62,14 @@ if (!empty($nik) && !empty($nama_tamu)) {
 // 2. Check Room Overlap
 if (!empty($nama_kamar)) {
     $stmtRoom = $conn->prepare("
-        SELECT nama_tamu FROM data_tamu 
-        WHERE nama_kamar = ? 
-        AND status != 'cancelled'
-        AND tanggal_check_in < ? 
-        AND tanggal_check_out > ? 
+        SELECT t.nama AS nama_tamu 
+        FROM checkin_tamu_log cl
+        JOIN tamu_ms t ON cl.id_tamu = t.id_tamu
+        JOIN inapan_ms i ON cl.id_inapan = i.id_inapan
+        WHERE i.nama_kamar = ? 
+        AND cl.status != 'cancelled'
+        AND i.tanggal_check_in < ? 
+        AND i.tanggal_check_out > ? 
         LIMIT 1
     ");
     if ($stmtRoom) {
@@ -84,11 +90,14 @@ if (!empty($nama_kamar)) {
 // 3. Check Class Overlap
 if (!empty($nama_kelas)) {
     $stmtClass = $conn->prepare("
-        SELECT nama_tamu FROM data_tamu 
-        WHERE nama_kelas = ? 
-        AND status != 'cancelled'
-        AND tanggal_check_in < ? 
-        AND tanggal_check_out > ? 
+        SELECT t.nama AS nama_tamu 
+        FROM checkin_tamu_log cl
+        JOIN tamu_ms t ON cl.id_tamu = t.id_tamu
+        JOIN inapan_ms i ON cl.id_inapan = i.id_inapan
+        WHERE i.nama_kelas = ? 
+        AND cl.status != 'cancelled'
+        AND i.tanggal_check_in < ? 
+        AND i.tanggal_check_out > ? 
         LIMIT 1
     ");
     if ($stmtClass) {

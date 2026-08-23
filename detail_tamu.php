@@ -10,34 +10,31 @@ include __DIR__ . '/config/koneksi.php';
 
 // --- FUNGSI HELPER ---
 
+require_once __DIR__ . '/services/s3_upload.php';
+
 /**
- * Menampilkan file upload (gambar atau link)
- * @param string $path Path file dari database
+ * Menampilkan file upload (S3 link)
+ * @param string $path S3 Key
  * @return string HTML untuk ditampilkan
  */
 function displayFile($path) {
     if (empty($path)) {
         return '<span class="text-muted">Tidak diupload</span>';
     }
-    if ($path === 'rfid_scan') {
-        return '<span class="badge bg-info text-dark">Scan RFID</span>';
-    }
     
-    $filePath = htmlspecialchars($path); 
-
-    $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-    $fileName = basename($filePath);
+    $s3Url = getS3Url($path);
+    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
     
     if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif'])) {
-        return '<a href="' . $filePath . '" target="_blank" title="Klik untuk perbesar">
-                    <img src="' . $filePath . '" class="img-thumbnail" style="max-width: 200px; max-height: 150px;" alt="Preview Dokumen">
+        return '<a href="' . $s3Url . '" target="_blank" title="Klik untuk perbesar">
+                    <img src="' . $s3Url . '" class="img-thumbnail" style="max-width: 200px; max-height: 150px;" alt="Preview Dokumen">
                 </a>';
     } elseif ($ext === 'pdf') {
-        return '<a href="' . $filePath . '" target="_blank" class="btn btn-outline-danger btn-sm">
+        return '<a href="' . $s3Url . '" target="_blank" class="btn btn-outline-danger btn-sm">
                     <i class="bi bi-file-earmark-pdf"></i> Lihat PDF
                 </a>';
     } else {
-        return '<a href="' . $filePath . '" target="_blank">Lihat File: ' . htmlspecialchars($fileName) . '</a>';
+        return '<a href="' . $s3Url . '" target="_blank">Lihat File</a>';
     }
 }
 
@@ -61,7 +58,19 @@ if (isset($_GET['id']) && is_numeric($_GET['id'])) {
 }
 
 // 4. Ambil Data Tamu dari Database
-$sql = "SELECT * FROM data_tamu WHERE id = ?";
+$sql = "SELECT 
+            t.nama as nama_tamu, t.nik, t.tempat_lahir, t.tanggal_lahir, t.jenis_kelamin, 
+            t.no_handphone as no_hp, t.email, t.akun_google, t.agama, t.pekerjaan, 
+            t.alamat, t.rt_rw, t.kelurahan_desa as kel_desa, t.kecamatan, t.kota_kabupaten, 
+            t.tipe_tamu, t.nama_instansi, 
+            i.nama_kamar, i.tanggal_check_in, i.tanggal_check_out, 
+            i.detail_acara as acara_judul_diklat, i.nama_kelas, i.harga_kamar, i.harga_kelas, 
+            cl.status, cl.input_method, cl.rfid_uid, cl.total_amount, 
+            cl.ocr_path as upload_identitas, cl.pembayaran_path as upload_pembayaran, cl.suhu_rata_rata 
+        FROM checkin_tamu_log cl 
+        JOIN tamu_ms t ON cl.id_tamu = t.id_tamu 
+        JOIN inapan_ms i ON cl.id_inapan = i.id_inapan 
+        WHERE cl.checkin_tamu_id = ?";
 $stmt = $conn->prepare($sql);
 
 if ($stmt === false) {
@@ -292,6 +301,9 @@ include 'UI/header.php';
                                     
                                     <dt class="col-sm-5">RFID UID</dt>
                                     <dd class="col-sm-7"><?php echo htmlspecialchars($tamu['rfid_uid'] ?? '-'); ?></dd>
+                                    
+                                    <dt class="col-sm-5">Suhu Rata-rata</dt>
+                                    <dd class="col-sm-7"><?php echo $tamu['suhu_rata_rata'] ? htmlspecialchars($tamu['suhu_rata_rata']) . ' &deg;C' : '-'; ?></dd>
                                 </dl>
 
                                 <?php if ($tamu['status'] === 'active'): ?>

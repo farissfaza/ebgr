@@ -1,0 +1,7 @@
+requests>=2.31.0
+adafruit-circuitpython-pn532
+adafruit-circuitpython-mlx90614
+opencv-python
+Flask
+Adafruit-Blinka
+RPi.GPIO

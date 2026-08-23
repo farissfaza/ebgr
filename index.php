@@ -28,28 +28,30 @@ if (!in_array($sort_column, $allowed_sort_columns)) {
 // Global Search (nama, nik, no_hp, kamar, kelas)
 if (!empty($_GET['search'])) {
     $search = "%" . $_GET['search'] . "%";
-    $where_clauses[] = "(nama_tamu LIKE ? OR nik LIKE ? OR no_hp LIKE ? OR nama_kelas LIKE ? OR nama_kamar LIKE ?)";
+    $where_clauses[] = "(t.nama LIKE ? OR t.nik LIKE ? OR t.no_handphone LIKE ? OR i.nama_kelas LIKE ? OR i.nama_kamar LIKE ?)";
     array_push($params, $search, $search, $search, $search, $search);
     $types .= "sssss";
 }
 
 // Date Range Filter
 if (!empty($_GET['start_date']) && !empty($_GET['end_date'])) {
-    $where_clauses[] = "(tanggal_check_in >= ? AND tanggal_check_out <= ?)";
+    $where_clauses[] = "(i.tanggal_check_in >= ? AND i.tanggal_check_out <= ?)";
     array_push($params, $_GET['start_date'], $_GET['end_date']);
     $types .= "ss";
 } elseif (!empty($_GET['start_date'])) {
-    $where_clauses[] = "tanggal_check_in >= ?";
+    $where_clauses[] = "i.tanggal_check_in >= ?";
     array_push($params, $_GET['start_date']);
     $types .= "s";
 } elseif (!empty($_GET['end_date'])) {
-    $where_clauses[] = "tanggal_check_out <= ?";
+    $where_clauses[] = "i.tanggal_check_out <= ?";
     array_push($params, $_GET['end_date']);
     $types .= "s";
 }
 
-$sql = "SELECT id, nama_tamu, nik, nama_kamar, nama_kelas, tanggal_check_in, tanggal_check_out, no_hp, status 
-        FROM data_tamu";
+$sql = "SELECT cl.checkin_tamu_id as id, t.nama as nama_tamu, t.nik, i.nama_kamar, i.nama_kelas, i.tanggal_check_in, i.tanggal_check_out, t.no_handphone as no_hp, cl.status, cl.suhu_rata_rata 
+        FROM checkin_tamu_log cl
+        JOIN tamu_ms t ON cl.id_tamu = t.id_tamu
+        JOIN inapan_ms i ON cl.id_inapan = i.id_inapan";
 
 if (count($where_clauses) > 0) {
     $sql .= " WHERE " . implode(" AND ", $where_clauses);
@@ -357,6 +359,7 @@ if (!empty($params)) {
                                                 <th><?php echo sortLink('nama_kelas', $sort_column, $sort_dir, 'Kelas'); ?></th>
                                                 <th><?php echo sortLink('tanggal_check_in', $sort_column, $sort_dir, 'Check-In'); ?></th>
                                                 <th><?php echo sortLink('tanggal_check_out', $sort_column, $sort_dir, 'Check-Out'); ?></th>
+                                                <th>Suhu</th>
                                                 <th><?php echo sortLink('status', $sort_column, $sort_dir, 'Status'); ?></th>
                                                 <th>Aksi</th>
                                             </tr>
@@ -376,6 +379,7 @@ if (!empty($params)) {
                                                     echo '<td>' . htmlspecialchars($row['nama_kelas'] ?? '-') . '</td>';
                                                     echo '<td>' . date('d M Y', strtotime($row['tanggal_check_in'])) . '</td>';
                                                     echo '<td>' . date('d M Y', strtotime($row['tanggal_check_out'])) . '</td>';
+                                                    echo '<td>' . ($row['suhu_rata_rata'] ? htmlspecialchars($row['suhu_rata_rata']) . ' &deg;C' : '-') . '</td>';
                                                     
                                                     // ================================================== //
                                                     //              ** AWAL PERUBAHAN ** //

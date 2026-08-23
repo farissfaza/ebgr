@@ -8,7 +8,7 @@ define('DEBUG_MODE', true);
 
 function debugLog($message) {
     if (DEBUG_MODE) {
-        $logFile = '/Applications/XAMPP/xamppfiles/htdocs/iot/ocr_debug_log.txt';
+        $logFile = __DIR__ . '/../ocr_debug_log.txt';
         $timestamp = date('Y-m-d H:i:s');
         @file_put_contents($logFile, "[$timestamp] [VISION API] $message\n", FILE_APPEND);
     }
@@ -266,15 +266,26 @@ try {
         throw new Exception('API Key Google Vision belum diatur di server (ocr_vision.php). Silakan masukkan API Key Anda terlebih dahulu.');
     }
     
-    if (!isset($_FILES['identitas']) || $_FILES['identitas']['error'] !== UPLOAD_ERR_OK) {
-        throw new Exception('Gagal mengunggah file. Pastikan foto terpilih.');
+    $imageData = null;
+    
+    if (!empty($_POST['s3_path'])) {
+        require_once __DIR__ . '/s3_upload.php';
+        $s3Path = $_POST['s3_path'];
+        debugLog("Using S3 Path: $s3Path");
+        
+        $tmpFile = downloadFromS3($s3Path);
+        if (!$tmpFile) {
+            throw new Exception("Gagal mengunduh gambar dari S3");
+        }
+        $imageData = base64_encode(file_get_contents($tmpFile));
+        @unlink($tmpFile); // Clean up temp file
+    } else if (isset($_FILES['identitas']) && $_FILES['identitas']['error'] === UPLOAD_ERR_OK) {
+        $tmpName = $_FILES['identitas']['tmp_name'];
+        debugLog("Received file size: " . filesize($tmpName) . " bytes.");
+        $imageData = base64_encode(file_get_contents($tmpName));
+    } else {
+        throw new Exception('Gagal mendapatkan gambar KTP. Pastikan foto terpilih atau S3 path valid.');
     }
-    
-    $tmpName = $_FILES['identitas']['tmp_name'];
-    debugLog("Received file size: " . filesize($tmpName) . " bytes.");
-    
-    // Base64 encode the image for Google API
-    $imageData = base64_encode(file_get_contents($tmpName));
     
     // Construct the payload
     $payload = [
@@ -307,6 +318,9 @@ try {
         'Content-Type: application/json',
         'Content-Length: ' . strlen($jsonPayload)
     ]);
+    // Fix for Windows dev environments missing CA certificates
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
     
     debugLog("Sending request to Google Vision API...");
     $response = curl_exec($ch);
