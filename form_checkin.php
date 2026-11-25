@@ -382,14 +382,14 @@ include 'UI/header.php';
                                             <h4>Live Preview KTP</h4>
                                             <p>Arahkan KTP ke depan kamera Raspi lalu klik tombol Ambil Foto.</p>
                                             <div class="mt-3 mb-3 d-flex justify-content-center">
-                                                <img src="http://10.59.201.134:5000/video_feed" class="img-fluid rounded border shadow-sm" style="max-height: 250px; width: auto;" alt="Live Camera Feed">
+                                                <video id="webcam-ktp" autoplay playsinline class="img-fluid rounded border shadow-sm" style="max-height: 250px; width: 100%; object-fit: cover;"></video>
                                             </div>
-                                            <button type="button" class="btn btn-primary rounded-pill px-4" onclick="startCameraKtp(); document.getElementById('ocr-waiting-box-overlay').classList.remove('d-none');">
+                                            <button type="button" class="btn btn-primary rounded-pill px-4" onclick="startCameraKtp();">
                                                 <i class="bi bi-camera me-1"></i> Ambil Foto
                                             </button>
                                             <div id="ocr-waiting-box-overlay" class="mt-3 d-none">
                                                 <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
-                                                <span class="ms-2">Mengambil foto...</span>
+                                                <span class="ms-2" id="ocr-camera-msg">Mengambil foto...</span>
                                             </div>
                                         </div>
                                     </div>
@@ -702,7 +702,7 @@ include 'UI/header.php';
                                                     <h5 class="mt-2">Live Preview Pembayaran</h5>
                                                     <p class="text-muted">Arahkan bukti pembayaran ke kamera Raspi</p>
                                                     <div class="mt-3 mb-3 d-flex justify-content-center">
-                                                        <img src="http://10.59.201.134:5000/video_feed" class="img-fluid rounded border shadow-sm" style="max-height: 250px; width: auto;" alt="Live Camera Feed">
+                                                        <video id="webcam-payment" autoplay playsinline class="img-fluid rounded border shadow-sm" style="max-height: 250px; width: 100%; object-fit: cover;"></video>
                                                     </div>
                                                     <button type="button" class="btn btn-warning rounded-pill px-4 mt-2" onclick="capturePayment()">
                                                         <i class="bi bi-camera me-1"></i> Ambil Foto
@@ -710,7 +710,7 @@ include 'UI/header.php';
                                                 </div>
                                                 <div id="payment-scanning" style="display:none;" class="text-center py-4">
                                                     <div class="spinner-border text-warning" role="status"></div>
-                                                    <p class="mt-2 text-muted">Menunggu foto dari kamera Raspi...</p>
+                                                    <p class="mt-2 text-muted" id="payment-camera-msg">Memproses foto...</p>
                                                 </div>
                                             </div>
 
@@ -789,6 +789,9 @@ include 'UI/header.php';
 
 <?php include 'UI/settings.php'; ?>
 
+<!-- Hidden Canvas for Webcam Capture -->
+<canvas id="webcam-canvas" style="display:none;"></canvas>
+
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -807,6 +810,45 @@ let selectedInputMethod = null;
 let activeTaskToken = null;
 let taskPollInterval = null;
 let raspiStatusInterval = null;
+let currentStream = null;
+
+function initWebcam(videoId) {
+    stopWebcam();
+    const video = document.getElementById(videoId);
+    if (!video) return;
+    
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function(stream) {
+                currentStream = stream;
+                video.srcObject = stream;
+            })
+            .catch(function(err) {
+                console.error("Webcam error:", err);
+                showAlert("Gagal mengakses kamera laptop.", "danger");
+            });
+    }
+}
+
+function stopWebcam() {
+    if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+        currentStream = null;
+    }
+}
+
+function captureFrameAsBlob(videoId, callback) {
+    const video = document.getElementById(videoId);
+    const canvas = document.getElementById('webcam-canvas');
+    if (!video || !canvas) return;
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    canvas.toBlob(callback, 'image/jpeg', 0.9);
+}
 
 // ========== RASPI STATUS POLLING ==========
 function fetchRaspiStatus() {
@@ -864,11 +906,13 @@ function switchKtpMode(mode) {
         upBtn.classList.remove('active');
         camDiv.style.display = 'block';
         upDiv.style.display = 'none';
+        initWebcam('webcam-ktp');
     } else {
         upBtn.classList.add('active');
         camBtn.classList.remove('active');
         upDiv.style.display = 'block';
         camDiv.style.display = 'none';
+        stopWebcam();
     }
 }
 
@@ -883,11 +927,13 @@ function switchPaymentMode(mode) {
         upBtn.classList.remove('active', 'active-warning');
         camDiv.style.display = 'block';
         upDiv.style.display = 'none';
+        initWebcam('webcam-payment');
     } else {
         upBtn.classList.add('active', 'active-warning');
         camBtn.classList.remove('active', 'active-warning');
         upDiv.style.display = 'block';
         camDiv.style.display = 'none';
+        stopWebcam();
     }
 }
 
@@ -895,6 +941,7 @@ function cancelScan() {
     if (taskPollInterval) clearInterval(taskPollInterval);
     activeTaskToken = null;
     selectedInputMethod = null;
+    stopWebcam();
     
     document.querySelectorAll('.scan-section').forEach(s => s.classList.remove('active'));
     document.getElementById('input-method-choice').style.display = 'flex';
@@ -913,6 +960,7 @@ function skipToManual() {
     if (taskPollInterval) clearInterval(taskPollInterval);
     activeTaskToken = null;
     document.getElementById('input_method').value = 'ocr';
+    stopWebcam();
     showMainForm();
 }
 
@@ -929,8 +977,10 @@ function uploadKtpFile(file) {
         return;
     }
     
-    const spinner = document.getElementById('ktp-upload-spinner');
-    const msg = document.getElementById('ktp-upload-msg');
+    const isCamera = document.getElementById('ktp-camera-mode').style.display !== 'none';
+    const spinner = isCamera ? document.getElementById('ocr-waiting-box-overlay') : document.getElementById('ktp-upload-spinner');
+    const msg = isCamera ? document.getElementById('ocr-camera-msg') : document.getElementById('ktp-upload-msg');
+    
     if (spinner) spinner.classList.remove('d-none');
     if (msg) msg.textContent = 'Mengunggah file KTP ke S3...';
     
@@ -960,6 +1010,15 @@ function uploadKtpFile(file) {
         if (formPreview && formPreviewContainer) {
             formPreview.src = s3Url;
             formPreviewContainer.classList.remove('d-none');
+        }
+        
+        // Update UI if in camera mode
+        if (isCamera) {
+            document.getElementById('ocr-waiting-box').style.display = 'none';
+            const previewContainer = document.getElementById('ktp-preview-container');
+            const previewImg = document.getElementById('ktp-preview-img');
+            previewImg.src = s3Url;
+            previewContainer.classList.remove('d-none');
         }
         
         // Run OCR
@@ -1078,73 +1137,37 @@ function handleRfidResult(data) {
 
 // ========== CAMERA KTP + OCR FLOW ==========
 function startCameraKtp() {
-    createRaspiTask('camera_ktp', handleCameraKtpResult);
-}
-
-function handleCameraKtpResult(data) {
-    const s3Path = data.s3_path;
-    const s3Url = data.s3_url;
+    const overlay = document.getElementById('ocr-waiting-box-overlay');
+    if (overlay) overlay.classList.remove('d-none');
     
-    if (!s3Path) {
-        showAlert('Gagal mengambil foto KTP.', 'danger');
-        return;
-    }
-    
-    // Store S3 path
-    document.getElementById('ocr_s3_path').value = s3Path;
-    
-    // Show KTP preview
-    document.getElementById('ocr-waiting-box').style.display = 'none';
-    const previewContainer = document.getElementById('ktp-preview-container');
-    const previewImg = document.getElementById('ktp-preview-img');
-    previewImg.src = s3Url;
-    previewContainer.classList.remove('d-none');
-    
-    // Also show in form area
-    const formPreview = document.getElementById('form-ktp-preview');
-    const formPreviewContainer = document.getElementById('form-ktp-preview-container');
-    if (formPreview && formPreviewContainer) {
-        formPreview.src = s3Url;
-        formPreviewContainer.classList.remove('d-none');
-    }
-    
-    // Run OCR on the S3 image
-    const ocrStatus = document.getElementById('ocr-status');
-    const ocrMessage = document.getElementById('ocr-message');
-    if (ocrStatus) { ocrStatus.style.display = 'block'; ocrMessage.textContent = 'Memproses OCR dari foto KTP...'; }
-    
-    fetch('services/ocr_vision.php', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 's3_path=' + encodeURIComponent(s3Path)
-    })
-    .then(r => r.json())
-    .then(ocrData => {
-        if (ocrStatus) ocrStatus.style.display = 'none';
-        
-        if (ocrData.success && ocrData.data) {
-            fillFormFromOCR(ocrData.data);
-            showAlert('Data KTP berhasil diekstrak!', 'success');
-        } else {
-            showAlert(ocrData.message || 'OCR gagal membaca KTP. Isi manual.', 'warning');
+    captureFrameAsBlob('webcam-ktp', function(blob) {
+        if (!blob) {
+            if (overlay) overlay.classList.add('d-none');
+            showAlert('Gagal mengambil foto dari kamera.', 'danger');
+            return;
         }
-        showMainForm();
-    })
-    .catch(err => {
-        if (ocrStatus) ocrStatus.style.display = 'none';
-        console.error('OCR error:', err);
-        showAlert('Terjadi kesalahan saat memproses OCR.', 'danger');
-        showMainForm();
+        
+        const file = new File([blob], 'ktp_capture.jpg', { type: 'image/jpeg' });
+        uploadKtpFile(file);
+        stopWebcam();
     });
 }
 
 // ========== PAYMENT CAPTURE & UPLOAD FLOW ==========
 function capturePayment() {
-    document.getElementById('payment-waiting-box').style.display = 'none';
     document.getElementById('payment-scanning').style.display = 'block';
     
-    createRaspiTask('camera_payment', handlePaymentResult);
-    updateProgress(4);
+    captureFrameAsBlob('webcam-payment', function(blob) {
+        if (!blob) {
+            document.getElementById('payment-scanning').style.display = 'none';
+            showAlert('Gagal mengambil foto dari kamera.', 'danger');
+            return;
+        }
+        
+        const file = new File([blob], 'payment_capture.jpg', { type: 'image/jpeg' });
+        uploadPaymentFile(file);
+        stopWebcam();
+    });
 }
 
 function handlePaymentFileSelect(input) {
@@ -1154,8 +1177,16 @@ function handlePaymentFileSelect(input) {
 }
 
 function uploadPaymentFile(file) {
-    const spinner = document.getElementById('payment-upload-spinner');
-    if (spinner) spinner.classList.remove('d-none');
+    const isCamera = document.getElementById('payment-camera-mode').style.display !== 'none';
+    const spinner = isCamera ? document.getElementById('payment-scanning') : document.getElementById('payment-upload-spinner');
+    const msg = isCamera ? document.getElementById('payment-camera-msg') : null;
+    
+    if (spinner) {
+        spinner.classList.remove('d-none');
+        if (isCamera) spinner.style.display = 'block';
+    }
+    
+    if (msg) msg.textContent = 'Mengunggah ke S3...';
     
     const formData = new FormData();
     formData.append('file', file);
@@ -1167,7 +1198,10 @@ function uploadPaymentFile(file) {
     })
     .then(r => r.json())
     .then(res => {
-        if (spinner) spinner.classList.add('d-none');
+        if (spinner) {
+            spinner.classList.add('d-none');
+            if (isCamera) spinner.style.display = 'none';
+        }
         if (res.success) {
             document.getElementById('pembayaran_s3_path').value = res.s3_key;
             
@@ -1184,35 +1218,13 @@ function uploadPaymentFile(file) {
         }
     })
     .catch(err => {
-        if (spinner) spinner.classList.add('d-none');
+        if (spinner) {
+            spinner.classList.add('d-none');
+            if (isCamera) spinner.style.display = 'none';
+        }
         console.error('Payment upload error:', err);
         showAlert('Gagal mengunggah bukti pembayaran.', 'danger');
     });
-}
-
-function handlePaymentResult(data) {
-    document.getElementById('payment-scanning').style.display = 'none';
-    
-    const s3Path = data.s3_path;
-    const s3Url = data.s3_url;
-    
-    if (!s3Path) {
-        showAlert('Gagal mengambil foto bukti pembayaran.', 'danger');
-        document.getElementById('payment-waiting-box').style.display = 'block';
-        return;
-    }
-    
-    // Store S3 path
-    document.getElementById('pembayaran_s3_path').value = s3Path;
-    
-    // Hide capture section & show preview
-    document.getElementById('payment-capture-section').style.display = 'none';
-    const previewContainer = document.getElementById('payment-preview-container');
-    const previewImg = document.getElementById('payment-preview-img');
-    previewImg.src = s3Url;
-    previewContainer.classList.remove('d-none');
-    
-    showAlert('Bukti pembayaran berhasil disimpan!', 'success');
 }
 
 function retakePayment() {
@@ -1272,6 +1284,7 @@ function fillFormFromOCR(data) {
 
 // ========== SHOW MAIN FORM ==========
 function showMainForm() {
+    stopWebcam();
     document.querySelectorAll('.scan-section').forEach(s => s.classList.remove('active'));
     document.getElementById('main-form-content').style.display = 'block';
     setDefaultDates();
